@@ -1,99 +1,94 @@
 import React, { useState, useEffect } from "react";
 import CurrencyInput from "react-currency-input-field";
+import { fetchRates, calculateConversion } from "./services/currencyService.js";
+import CurrencySelect from "./components/currencySelect.js";
 import "./styles.css";
 
 function App() {
-  const [rates, setRates] = useState();
-  const [ratesFetched, setRatesFetched] = useState(false);
+  const [rates, setRates] = useState({});
   const [amount, setAmount] = useState(0);
   const [fromCurrency, setFromCurrency] = useState("USD");
   const [toCurrency, setToCurrency] = useState("INR");
-  const [output, setOutput] = useState();
+  const [output, setOutput] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const getRates = async () => {
-    // fetch the data from API
-    const response = await fetch(
-      "https://v6.exchangerate-api.com/v6/59d560835c4e8d4f996adc83/latest/USD"
-    ).then((response) => response.json());
+  useEffect(() => {
+    fetchRates()
+      .then((fetchedRates) => {
+        setRates(fetchedRates);
+        setIsLoading(false);
+      })
+      .catch((error) => {
+        console.error("Error fetching rates:", error);
+        setIsLoading(false);
+      });
+  }, []);
 
-    // save the rates in the state
-    if (response.result === "success") {
-      setRates(response.conversion_rates);
-      setRatesFetched(true);
+  const handleCalculate = async () => {
+    try {
+      const result = await calculateConversion(
+        amount,
+        fromCurrency,
+        toCurrency
+      );
+      setOutput(result);
+    } catch (error) {
+      console.error("Error calculating conversion:", error);
     }
   };
 
-  useEffect(() => {
-    getRates();
-  }, []);
-
-  const calculateOutput = async () => {
-    // fetch the selected from currency rates
-    const response = await fetch(
-      `https://v6.exchangerate-api.com/v6/59d560835c4e8d4f996adc83/latest/${fromCurrency}`
-    ).then((response) => response.json());
-    const fetchedRates = response.conversion_rates;
-    const CurrencyRate = fetchedRates[toCurrency];
-    const output = amount * CurrencyRate;
-    setOutput(output);
-  };
+  if (isLoading) {
+    return <div className="loading">Loading...</div>;
+  }
 
   return (
-    <div className="container">
-      <div className="input-amount">
-        <label>Amount:</label>
-        <CurrencyInput
-          value={amount}
-          onValueChange={(amount) => setAmount(amount)}
-          intlConfig={{ locale: "en-US", currency: fromCurrency }}
-          allowDecimals={true}
-          allowNegativeValue={false}
-        />
-      </div>
-
-      <div className="input-from">
-        <label>From:</label>
-        <select
-          id="from"
-          value={fromCurrency}
-          onChange={(e) => setFromCurrency(e.target.value)}
-        >
-          {ratesFetched ? (
-            Object.keys(rates).map((currency, index) => (
-              <option key={index} value={currency}>
-                {currency}
-              </option>
-            ))
-          ) : (
-            <option defaultValue>USD</option>
+    <div className="app">
+      <header className="app-header">
+        <h1>Currency Converter</h1>
+      </header>
+      <main className="app-main">
+        <div className="converter-container">
+          <div className="input-group">
+            <CurrencyInput
+              value={amount}
+              onValueChange={(value) => setAmount(value)}
+              intlConfig={{ locale: "en-US", currency: fromCurrency }}
+              allowDecimals={true}
+              allowNegativeValue={false}
+              className="currency-input"
+              placeholder="Enter amount"
+            />
+            <CurrencySelect
+              id="from"
+              value={fromCurrency}
+              onChange={setFromCurrency}
+              rates={rates}
+              defaultValue="USD"
+              label="From"
+            />
+          </div>
+          <div className="input-group">
+            <CurrencySelect
+              id="to"
+              value={toCurrency}
+              onChange={setToCurrency}
+              rates={rates}
+              defaultValue="INR"
+              label="To"
+            />
+          </div>
+          <button className="calculate-btn" onClick={handleCalculate}>
+            Calculate
+          </button>
+          {output !== null && (
+            <div className="output">
+              <p>
+                {amount} {fromCurrency} = {output.toFixed(2)} {toCurrency}
+              </p>
+            </div>
           )}
-        </select>
-      </div>
-
-      <div className="input-to">
-        <label>To:</label>
-        <select
-          id="to"
-          value={toCurrency}
-          onChange={(e) => setToCurrency(e.target.value)}
-        >
-          {ratesFetched ? (
-            Object.keys(rates).map((currency, index) => (
-              <option key={index} value={currency}>
-                {currency}
-              </option>
-            ))
-          ) : (
-            <option defaultValue>INR</option>
-          )}
-        </select>
-      </div>
-      <button className="btn" onClick={() => calculateOutput()}>
-        Calculate
-      </button>
-      <div className="output">
-        <label>Output: {output}</label>
-      </div>
+        </div>
+      </main>
     </div>
   );
 }
